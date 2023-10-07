@@ -45,7 +45,88 @@ end cpu;
 --                      Architecture declaration
 -- ----------------------------------------------------------------------------
 architecture behavioral of cpu is
-begin
+
+-- SIGNALS
+-- CNT REGISTER
+  signal cnt_inc    :   std_logic;
+  signal cnt_dec    :   std_logic;
+
+-- PTR REGISTER
+  signal ptr_inc    :   std_logic;
+  signal ptr_dec    :   std_logic;
+  signal ptr_reset  :   std_logic;
+  signal ptr_addr    :   std_logic_vector(12 downto 0);
+
+-- PC REGISTER
+  signal pc_inc     :   std_logic;
+  signal pc_dec     :   std_logic;
+  signal pc_addr     :   std_logic_vector(12 downto 0);
+
+-- MX1
+  signal MX1_out    :   std_logic_vector(12 downto 0);
+  signal MX1_select :   std_logic;
+
+-- MX2
+  signal MX2_out    :   std_logic_vector(7 downto 0);
+  signal MX2_in     :   std_logic_vector(7 downto 0);
+  signal MX2_inc    :   std_logic;
+  signal MX2_dec    :   std_logic;
+  signal MX2_select :   std_logic;
+
+
+-- FSM
+  type fsm_state is (s_start, s_fetch, s_decode, s_ptr_inc, s_ptr_dec, s_val_inc, s_val_dec, s_loop_begin, s_loop_end, s_write, s_read, s_null)
+  signal pstate : fsm_state :- s_start;
+  signal nstate : fsm_state :- s_start;
+
+  begin
+  -- PC PROCESS
+    pc: process (CLK, RESET, pc_inc, pc_dec) is
+      begin
+        if (RESET = '1') then
+          pc_addr <= (others => '0');
+        elsif rising_edge(CLK) then
+          if pc_inc = '1' then
+            pc_addr <= pc_addr + 1;
+          elsif pc_dec = '1' then
+            pc_addr <= pc_addr - 1;
+          end if:
+        end if:
+      end process:
+
+    -- PTR PROCESS
+    ptr: process (CLK, RESET, ptr_inc, ptr_dec, ptr_reset) is
+      begin
+        if (RESET = '1') then
+          ptr_addr <= (others => '0');
+        elsif rising_edge(CLK) then
+          if ptr_inc = '1' then
+            ptr_addr <= ptr_addr + 1;
+          elsif ptr_dec = '1' then
+            ptr_addr <= ptr_addr - 1;
+          elsif ptr_rst = '1' then
+            ptr_addr
+          end if:
+        end if:
+      end process:
+
+    -- MX1
+    mx1: process (CLK, MX1_select, ptr_addr, pc_addr) is
+      begin
+        if (MX1_select = '0') then
+          DATA_ADDR <= ptr_addr;
+        elsif (MX1_select = '1') then
+          DATA_ADDR <= pc_addr;
+        end if:
+      end process:
+
+
+    --fsm_pstate: process (RESET, CLK)
+      --begin
+        --if (RESET='1')
+          --pstate <=
+
+
 
  -- pri tvorbe kodu reflektujte rady ze cviceni INP, zejmena mejte na pameti, ze 
  --   - nelze z vice procesu ovladat stejny signal,
