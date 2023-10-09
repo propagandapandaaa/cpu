@@ -76,18 +76,24 @@ architecture behavioral of cpu is
 
 -- FSM
   type fsm_state is ( s_start, s_fetch, s_decode, -- FSM Operational states
-                      s_ptr_inc, s_ptr_dec,       -- PTR Register states
-                      s_val_inc, s_val_dec,       -- 
-                      s_loop_begin, s_loop_end, 
+                      s_ptr_inc, 
+                      s_ptr_dec,       
+                      s_val_inc0, s_val_inc1, 
+                      s_val_dec,      
+                      s_loop_begin, 
+                      s_loop_end, 
                       s_break,
-                      s_write, s_read, s_out_we,
-                      s_null)
+                      s_write, 
+                      s_read, 
+                      s_out_we,
+                      s_null
+                      s_halt)
 
   signal pstate : fsm_state :- s_start;
   signal nstate : fsm_state :- s_start;
 
   begin
-  -- PC PROCESS
+  -- PC REG PROCESS
     pc: process (CLK, RESET, pc_inc, pc_dec) is
       begin
         if (RESET = '1') then
@@ -101,7 +107,7 @@ architecture behavioral of cpu is
         end if;
       end process;
 
-    -- PTR PROCESS
+    -- PTR REG PROCESS
     ptr: process (CLK, RESET, ptr_inc, ptr_dec, ptr_reset) is
       begin
         if (RESET = '1') then
@@ -155,11 +161,13 @@ architecture behavioral of cpu is
         if RESET = '1' then
           pstate <= s_start;
         elsif rising_edge(CLK) then
-          pstate <= nstate;
+          if (EN = '1') then
+            pstate <= nstate;
+          end if;
         end if;
       end process;
 
-    fsm: process (pstate, OUT_BUSY, IN_VLD, DATA_RDATA, CNT)
+    fsm: process (pstate, EN, OUT_BUSY, IN_VLD, DATA_RDATA, CNT)
       begin
         cnt_inc    <= '0';
         cnt_dec    <= '0';
@@ -180,36 +188,46 @@ architecture behavioral of cpu is
         IN_REQ     <= '0';
 
         case pstate is
-
           when s_start =>
             nstate <= s_fetch;
-
           when s_fetch =>
             EN <= '1';
             nstate <= s_decode;
 
           when s_decode =>
             case DATA_ADDR is
-              when 0x3E => -- ">"
+              when X"3E"  => -- ">"
                 nstate <= s_ptr_inc;
-              when 0x3C => -- "<"
+
+              when X"3C"  => -- "<"
                 nstate <= s_ptr_dec;
-              when 0x2B => -- "+"
+
+              when X"2B"  => -- "+"
                 nstate <= s_val_inc;
-              when 0x2D => -- "-"
+
+              when X"2D"  => -- "-"
                 nstate <= s_val_dec;
-              when 0x5B => -- "["
+
+              when X"5B"  => -- "["
                 nstate <= s_loop_begin;
-              when 0x5D => -- "]"
+
+              when X"5D"  => -- "]"
                 nstate <= s_loop_end;
-              when 0x7E => -- "~"
+
+              when X"7E"  => -- "~"
                 nstate <= s_break;
-              when 0x2E => -- "."
+
+              when X"2E"  => -- "."
                 nstate <= s_write;
-              when 0x2C => -- ","
+
+              when X"2C"  => -- ","
                 nstate <= s_read;
-              when 0x40 => -- "@"
+
+              when X"40"  => -- "@"
                 nstate <= s_null;
+
+              when others =>
+                nstate <= s_halt;
             end case;
 
           when s_ptr_inc    =>
@@ -219,16 +237,23 @@ architecture behavioral of cpu is
 
           when s_ptr_dec    =>
               ptr_dec  <= '1';
-              pc_dec   <= '1';
+              pc_inc   <= '1';
               nstate   <= s_fetch;
 
-          when s_val_inc    =>
+          when s_val_inc0   =>
               DATA_EN <= '1';
-              DATA_WE <= '0'
+              DATA_WE <= '0';
+              DATA_RDWR <= '1';
+              MX1_select <= '0';
+          
+          when s_val_inc1   =>
 
           when s_val_dec    =>
           when s_loop_begin =>
           when s_loop_end   =>
+              if DATA_RDATA /= "00000000" then
+                nstate <= 
+              
           when s_break      =>
 
           when s_write      =>
@@ -252,13 +277,13 @@ architecture behavioral of cpu is
             if IN_VLD = '0'; then
               pc_inc    <= '1';
             end if;
-              DATA_EN   <= '1';
-              DATA_RDWR <= '0';
-              nstate    <= s_fetch;
+            
 
           when s_null       =>
               pc_addr <= pc_addr;
               DONE    <= '1';
+          when s_halt       =>
+              
           when others       =>
               pc_inc <= '1';
               nstate <= s_decode;
