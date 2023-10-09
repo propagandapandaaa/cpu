@@ -80,7 +80,7 @@ architecture behavioral of cpu is
                       s_val_inc, s_val_dec,       -- 
                       s_loop_begin, s_loop_end, 
                       s_break,
-                      s_write, s_read, 
+                      s_write, s_read, s_out_we,
                       s_null)
 
   signal pstate : fsm_state :- s_start;
@@ -213,15 +213,55 @@ architecture behavioral of cpu is
             end case;
 
           when s_ptr_inc    =>
+              ptr_inc  <= '1';
+              pc_inc   <= '1';
+              nstate   <= s_fetch;
+
           when s_ptr_dec    =>
+              ptr_dec  <= '1';
+              pc_dec   <= '1';
+              nstate   <= s_fetch;
+
           when s_val_inc    =>
+              DATA_EN <= '1';
+              DATA_WE <= '0'
+
           when s_val_dec    =>
           when s_loop_begin =>
           when s_loop_end   =>
           when s_break      =>
+
           when s_write      =>
+              DATA_EN   <= '1';
+              DATA_RDWR <= '1';
+              nstate    <= s_fetch;
+          
+          when s_out_we     => -- REVIEW THIS STATE IF ITS NECESSARY
+              if OUT_DATA = '1' then
+                DATA_EN   <= '1';
+                DATA_RDWR <= '1';
+                nstate    <= s_out_we;
+              else
+                OUT_WE  <= '1';
+                pc_inc  <= '1';
+              end if;
+         
+
           when s_read       =>
+            IN_REQ <= '1';
+            if IN_VLD = '0'; then
+              pc_inc    <= '1';
+            end if;
+              DATA_EN   <= '1';
+              DATA_RDWR <= '0';
+              nstate    <= s_fetch;
+
           when s_null       =>
+              pc_addr <= pc_addr;
+              DONE    <= '1';
+          when others       =>
+              pc_inc <= '1';
+              nstate <= s_decode;
         end case;
       end process;
           
