@@ -68,14 +68,15 @@ architecture behavioral of cpu is
 
 -- MX2
   signal MX2_out    :   std_logic_vector(7 downto 0);
-  signal MX2_in     :   std_logic_vector(7 downto 0);
-  signal MX2_inc    :   std_logic;
-  signal MX2_dec    :   std_logic;
+  --signal MX2_in     :   std_logic_vector(7 downto 0);
+  --signal MX2_inc    :   std_logic;
+  --signal MX2_dec    :   std_logic;
   signal MX2_select :   std_logic_vector(1 downto 0);
 
 
 -- FSM
-  type fsm_state is ( s_start, s_fetch, s_decode, -- FSM Operational states
+  type fsm_state is ( s_init,
+                      s_start, s_fetch, s_decode, -- FSM Operational states
                       s_ptr_inc, 
                       s_ptr_dec,       
                       s_val_inc0, s_val_inc1, s_val_inc2,
@@ -85,11 +86,11 @@ architecture behavioral of cpu is
                       s_break,
                       s_write0, s_write1, 
                       s_read, 
-                      s_end
-                      s_halt)
+                      s_end,
+                      s_halt);
 
-  signal pstate : fsm_state :- s_start;
-  signal nstate : fsm_state :- s_start;
+  signal pstate : fsm_state := s_start;
+  signal nstate : fsm_state := s_start;
 
   begin
   -- PC REG PROCESS
@@ -116,7 +117,7 @@ architecture behavioral of cpu is
             ptr_addr <= ptr_addr + 1;
           elsif ptr_dec = '1' then
             ptr_addr <= ptr_addr - 1;
-          elsif ptr_rst = '1' then
+          elsif ptr_reset = '1' then
             ptr_addr <= (others => '0');
           end if;
         end if;
@@ -128,9 +129,9 @@ architecture behavioral of cpu is
         if (RESET = '1') then
           MX1_out <= (others => '0'); -- SHOULD BE OKAY
         elsif (MX1_select = '0') then
-          DATA_ADDR <= ptr_addr;
+          MX1_out <= ptr_addr;
         elsif (MX1_select = '1') then
-          DATA_ADDR <= pc_addr;
+          MX1_out <= pc_addr;
         end if;
       end process;
 
@@ -147,18 +148,18 @@ architecture behavioral of cpu is
               MX2_out <= DATA_RDATA - 1;
             when "10" =>
               MX2_out <= DATA_RDATA + 1;
-            when others <= (others => '0');
+            when others => 
+              MX2_out <= (others => '0');
           end case;
         end if;
       end process;
           
 
-
     -- FSM
     state_logic: process (CLK, RESET, EN) is
       begin
         if RESET = '1' then
-          pstate <= s_start;
+          pstate <= s_init;
         elsif rising_edge(CLK) then
           if (EN = '1') then
             pstate <= nstate;
@@ -166,7 +167,7 @@ architecture behavioral of cpu is
         end if;
       end process;
 
-    fsm: process (pstate, EN, OUT_BUSY, IN_VLD, DATA_RDATA, CNT)
+    fsm: process (pstate, EN, OUT_BUSY, IN_VLD, DATA_RDATA, CLK)
       begin
         cnt_inc    <= '0';
         cnt_dec    <= '0';
@@ -181,20 +182,38 @@ architecture behavioral of cpu is
         MX1_select <= '0';
         MX2_select <= "00";
 
+
         DATA_RDWR  <= '0';
         DATA_EN    <= '0';
         OUT_WE     <= '0';
         IN_REQ     <= '0';
+        DONE       <= '0';
 
         case pstate is
+          when s_init  =>
+            DATA_EN <= '1';
+            MX1_select <= '1';
+            DATA_RDWR <= '0';
+            DONE <= '0';
+            READY <= '0';
+            if DATA_RDATA = X"40" then 
+              ptr_addr <= pc_addr; 
+              nstate <= s_start;
+            else
+              pc_inc <= '1';
+            end if;
+
           when s_start =>
+            pc_addr <= (others => '0');
             nstate <= s_fetch;
           when s_fetch =>
-            EN <= '1';
+            DATA_EN <= '1';
+            MX1_select <= '1';
+            DATA_RDWR <= '0';
             nstate <= s_decode;
 
           when s_decode =>
-            case DATA_ADDR is
+            case DATA_RDATA is
               when X"3E"  => -- ">"
                 nstate <= s_ptr_inc;
 
@@ -202,10 +221,10 @@ architecture behavioral of cpu is
                 nstate <= s_ptr_dec;
 
               when X"2B"  => -- "+"
-                nstate <= s_val_inc;
+                nstate <= s_val_inc0;
 
               when X"2D"  => -- "-"
-                nstate <= s_val_dec;
+                nstate <= s_val_dec0;
 
               when X"5B"  => -- "["
                 nstate <= s_loop_begin;
@@ -217,7 +236,7 @@ architecture behavioral of cpu is
                 nstate <= s_break;
 
               when X"2E"  => -- "."
-                nstate <= s_write;
+                nstate <= s_write0;
 
               when X"2C"  => -- ","
                 nstate <= s_read;
@@ -247,9 +266,10 @@ architecture behavioral of cpu is
               nstate <= s_val_inc1;
           when s_val_inc1   => -- SET TO WRITE MODE
               DATA_RDWR <= '1';
+              MX2_select <= "10";
               nstate <= s_val_inc2;
           when s_val_inc2   =>
-              DATA_ADDR <= DATA_RDATA + 1;
+              --MX2_out <= DATA_RDATA;
               pc_inc <= '1';
               nstate <= s_fetch; 
 
@@ -257,13 +277,14 @@ architecture behavioral of cpu is
           when s_val_dec0   =>
               DATA_EN <= '1';
               DATA_RDWR <= '0';
-              MX_select <= '0';
+              MX1_select <= '0';
               nstate <= s_val_dec1;
           when s_val_dec1   =>
               DATA_RDWR <= '1';
+              MX2_select <= "01";
               nstate <= s_val_dec2;
           when s_val_dec2   =>
-              DATA_ADDR <= DATA_RDATA - 1;
+              --DATA_ADDR <= DATA_RDATA - 1;
               nstate <= s_fetch;
 
           -- LOOPS
@@ -282,7 +303,7 @@ architecture behavioral of cpu is
               MX1_select <= '0';
               nstate    <= s_write1;
           when s_write1     => 
-              if OUT_DATA = '1' then
+              if OUT_BUSY = '1' then
                 DATA_EN   <= '1';
                 DATA_RDWR <= '0';
                 OUT_WE  <= '1';
@@ -292,15 +313,9 @@ architecture behavioral of cpu is
                 pc_inc  <= '1';
                 nstate <= s_fetch;
               end if;
-         
 
           when s_read       =>
-            IN_REQ <= '1';
-            if IN_VLD = '0'; then
-              pc_inc    <= '1';
-            end if;
             
-
           when s_end       =>
               pc_addr <= pc_addr;
               DONE    <= '1';
@@ -311,19 +326,6 @@ architecture behavioral of cpu is
               nstate <= s_decode;
         end case;
       end process;
-          
-    --fsm_pstate: process (RESET, CLK)
-      --begin
-        --if (RESET='1')
-          --pstate <=
-
-
-
- -- pri tvorbe kodu reflektujte rady ze cviceni INP, zejmena mejte na pameti, ze 
- --   - nelze z vice procesu ovladat stejny signal,
- --   - je vhodne mit jeden proces pro popis jedne hardwarove komponenty, protoze pak
- --      - u synchronnich komponent obsahuje sensitivity list pouze CLK a RESET a 
- --      - u kombinacnich komponent obsahuje sensitivity list vsechny ctene signaly. 
 
 end behavioral;
 
