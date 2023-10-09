@@ -249,35 +249,35 @@ architecture behavioral of cpu is
             end case;
 
           when s_ptr_inc    =>
-              ptr_inc  <= '1';
-              pc_inc   <= '1';
-              nstate   <= s_fetch;
+            ptr_inc  <= '1';
+            pc_inc   <= '1';
+            nstate   <= s_fetch;
 
           when s_ptr_dec    =>
-              ptr_dec  <= '1';
-              pc_inc   <= '1';
-              nstate   <= s_fetch;
+            ptr_dec  <= '1';
+            pc_inc   <= '1';
+            nstate   <= s_fetch;
 
           -- POINTER VALUE INCREASE
           when s_val_inc0   => -- ENABLE DATA, SET TO READ MODE, ADDR set to PTR
-              DATA_EN <= '1';
-              DATA_RDWR <= '0';
-              MX1_select <= '0';
-              nstate <= s_val_inc1;
+            DATA_EN <= '1';
+            DATA_RDWR <= '0';
+            MX1_select <= '0';
+            nstate <= s_val_inc1;
           when s_val_inc1   => -- SET TO WRITE MODE
-              DATA_RDWR <= '1';
-              MX2_select <= "10";
-              nstate <= s_val_inc2;
+            DATA_RDWR <= '1';
+            MX2_select <= "10";
+            nstate <= s_val_inc2;
           when s_val_inc2   =>
-              --MX2_out <= DATA_RDATA;
-              pc_inc <= '1';
-              nstate <= s_fetch; 
+            --MX2_out <= DATA_RDATA;
+            pc_inc <= '1';
+            nstate <= s_fetch; 
 
           -- POINTER VALUE DECREASE
           when s_val_dec0   =>
-              DATA_EN <= '1';
-              DATA_RDWR <= '0';
-              MX1_select <= '0';
+            DATA_EN <= '1';
+             DATA_RDWR <= '0';
+             MX1_select <= '0';
               nstate <= s_val_dec1;
           when s_val_dec1   =>
               DATA_RDWR <= '1';
@@ -297,33 +297,33 @@ architecture behavioral of cpu is
 
           -- WRITE
           when s_write0     =>
+            DATA_EN   <= '1';
+            DATA_RDWR <= '0';
+            OUT_WE  <= '1';
+            MX1_select <= '0';
+            nstate    <= s_write1;
+          when s_write1     => 
+            if OUT_BUSY = '1' then
               DATA_EN   <= '1';
               DATA_RDWR <= '0';
               OUT_WE  <= '1';
-              MX1_select <= '0';
               nstate    <= s_write1;
-          when s_write1     => 
-              if OUT_BUSY = '1' then
-                DATA_EN   <= '1';
-                DATA_RDWR <= '0';
-                OUT_WE  <= '1';
-                nstate    <= s_write1;
-              else
-                OUT_DATA <= DATA_RDATA;
-                pc_inc  <= '1';
-                nstate <= s_fetch;
-              end if;
+            else
+              OUT_DATA <= DATA_RDATA;
+              pc_inc  <= '1';
+              nstate <= s_fetch;
+            end if;
 
           when s_read       =>
             
           when s_end       =>
-              pc_addr <= pc_addr;
-              DONE    <= '1';
+            pc_addr <= pc_addr;
+            DONE    <= '1';
           when s_halt       =>
               
           when others       =>
-              pc_inc <= '1';
-              nstate <= s_decode;
+            pc_inc <= '1';
+            nstate <= s_decode;
         end case;
       end process;
 
