@@ -78,15 +78,14 @@ architecture behavioral of cpu is
   type fsm_state is ( s_start, s_fetch, s_decode, -- FSM Operational states
                       s_ptr_inc, 
                       s_ptr_dec,       
-                      s_val_inc0, s_val_inc1, 
-                      s_val_dec,      
+                      s_val_inc0, s_val_inc1, s_val_inc2,
+                      s_val_dec0, s_val_dec1, s_val_dec2,
                       s_loop_begin, 
                       s_loop_end, 
                       s_break,
-                      s_write, 
+                      s_write0, s_write1, 
                       s_read, 
-                      s_out_we,
-                      s_null
+                      s_end
                       s_halt)
 
   signal pstate : fsm_state :- s_start;
@@ -127,7 +126,7 @@ architecture behavioral of cpu is
     mx1: process (CLK, RESET, MX1_select, ptr_addr, pc_addr) is
       begin
         if (RESET = '1') then
-          MX1_out <= '0'; -- CHECK IF VALID
+          MX1_out <= (others => '0'); -- SHOULD BE OKAY
         elsif (MX1_select = '0') then
           DATA_ADDR <= ptr_addr;
         elsif (MX1_select = '1') then
@@ -224,7 +223,7 @@ architecture behavioral of cpu is
                 nstate <= s_read;
 
               when X"40"  => -- "@"
-                nstate <= s_null;
+                nstate <= s_end;
 
               when others =>
                 nstate <= s_halt;
@@ -240,35 +239,58 @@ architecture behavioral of cpu is
               pc_inc   <= '1';
               nstate   <= s_fetch;
 
-          when s_val_inc0   =>
+          -- POINTER VALUE INCREASE
+          when s_val_inc0   => -- ENABLE DATA, SET TO READ MODE, ADDR set to PTR
               DATA_EN <= '1';
-              DATA_WE <= '0';
-              DATA_RDWR <= '1';
+              DATA_RDWR <= '0';
               MX1_select <= '0';
-          
-          when s_val_inc1   =>
+              nstate <= s_val_inc1;
+          when s_val_inc1   => -- SET TO WRITE MODE
+              DATA_RDWR <= '1';
+              nstate <= s_val_inc2;
+          when s_val_inc2   =>
+              DATA_ADDR <= DATA_RDATA + 1;
+              pc_inc <= '1';
+              nstate <= s_fetch; 
 
-          when s_val_dec    =>
+          -- POINTER VALUE DECREASE
+          when s_val_dec0   =>
+              DATA_EN <= '1';
+              DATA_RDWR <= '0';
+              MX_select <= '0';
+              nstate <= s_val_dec1;
+          when s_val_dec1   =>
+              DATA_RDWR <= '1';
+              nstate <= s_val_dec2;
+          when s_val_dec2   =>
+              DATA_ADDR <= DATA_RDATA - 1;
+              nstate <= s_fetch;
+
+          -- LOOPS
           when s_loop_begin =>
           when s_loop_end   =>
               if DATA_RDATA /= "00000000" then
-                nstate <= 
-              
+              end if;
+            
           when s_break      =>
 
-          when s_write      =>
+          -- WRITE
+          when s_write0     =>
               DATA_EN   <= '1';
-              DATA_RDWR <= '1';
-              nstate    <= s_fetch;
-          
-          when s_out_we     => -- REVIEW THIS STATE IF ITS NECESSARY
+              DATA_RDWR <= '0';
+              OUT_WE  <= '1';
+              MX1_select <= '0';
+              nstate    <= s_write1;
+          when s_write1     => 
               if OUT_DATA = '1' then
                 DATA_EN   <= '1';
-                DATA_RDWR <= '1';
-                nstate    <= s_out_we;
-              else
+                DATA_RDWR <= '0';
                 OUT_WE  <= '1';
+                nstate    <= s_write1;
+              else
+                OUT_DATA <= DATA_RDATA;
                 pc_inc  <= '1';
+                nstate <= s_fetch;
               end if;
          
 
@@ -279,7 +301,7 @@ architecture behavioral of cpu is
             end if;
             
 
-          when s_null       =>
+          when s_end       =>
               pc_addr <= pc_addr;
               DONE    <= '1';
           when s_halt       =>
